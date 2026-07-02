@@ -14,8 +14,24 @@ The original site is a client-side mock with no chain and no real ZK. This repo 
 | | |
 |---|---|
 | Network | Gnosis Chain (id 100) |
-| Contract | `ZKBurn` — *address filled in after deploy* |
-| Explorer | https://gnosis.blockscout.com |
+| Contract | [`0x772fA3dde14AAEeCD3c98E9b26E07a9afFfC46b4`](https://gnosis.blockscout.com/address/0x772fA3dde14AAEeCD3c98E9b26E07a9afFfC46b4) |
+| Verified | Blockscout (solc 0.8.35) + [Sourcify full match](https://sourcify.dev/server/v2/contract/100/0x772fA3dde14AAEeCD3c98E9b26E07a9afFfC46b4) |
+| Deployed via | [etherform](https://github.com/BreadchainCoop/etherform) `_deploy-testnet.yml` reusable workflow (`workflow_dispatch`) |
+| Config | domain `zkburn.app`, scope `zkburn-v1`, verifier `0x1D000001000EFD9a6371f4d90bB8920D5431c0D8` |
+
+## Demos
+
+Recorded end-to-end against the **live Gnosis mainnet contract** (every step is a real transaction; the QR in flow 1 is a genuine zkPassport request, completable with the ZKPassport mobile app — the recording finishes via the clearly-labeled demo-mode simulated proof since a phone can't scan a headless browser):
+
+| Flow | GIF |
+|---|---|
+| 1. John registers (zkPassport QR → JohnID) | ![john registers](demos/1-john-register.gif) |
+| 2. Worker checks ID + proposes interaction | ![worker checks](demos/2-worker-check-request.gif) |
+| 3. John authorizes (mutual consent) | ![john authorizes](demos/3-john-authorize.gif) |
+| 4. Worker vouches, burns w/ note, re-checks | ![vouch and burn](demos/4-worker-vouch-burn.gif) |
+
+Reproduce with `demos/record-demos.mjs` (Playwright): fund two burner keys with a little xDAI, then
+`JOHN_PK=0x… WORKER_PK=0x… BASE_URL=http://localhost:3100 node demos/record-demos.mjs`.
 
 ## Repo layout
 

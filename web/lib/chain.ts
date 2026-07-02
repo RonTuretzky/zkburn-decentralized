@@ -2,12 +2,12 @@ import { createPublicClient, http } from "viem";
 import { gnosis } from "viem/chains";
 
 /**
- * Placeholder fallback — updated post-deploy with the latest deployed address.
- * If NEXT_PUBLIC_ZKBURN_ADDRESS is unset and this is still zero, the UI shows
- * a warning banner.
+ * Latest deployed ZKBurn on Gnosis mainnet (chain 100), deployed via the
+ * etherform GitHub Actions workflow and verified on Blockscout.
+ * Override with NEXT_PUBLIC_ZKBURN_ADDRESS.
  */
 export const FALLBACK_ZKBURN_ADDRESS =
-  "0x0000000000000000000000000000000000000000" as const;
+  "0x772fA3dde14AAEeCD3c98E9b26E07a9afFfC46b4" as const;
 
 export const ZKBURN_ADDRESS = ((process.env.NEXT_PUBLIC_ZKBURN_ADDRESS ??
   "") !== ""
@@ -15,7 +15,7 @@ export const ZKBURN_ADDRESS = ((process.env.NEXT_PUBLIC_ZKBURN_ADDRESS ??
   : FALLBACK_ZKBURN_ADDRESS) as `0x${string}`;
 
 export const isContractConfigured =
-  ZKBURN_ADDRESS.toLowerCase() !== FALLBACK_ZKBURN_ADDRESS;
+  ZKBURN_ADDRESS.toLowerCase() !== `0x${"0".repeat(40)}`;
 
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL ?? "https://rpc.gnosischain.com";
