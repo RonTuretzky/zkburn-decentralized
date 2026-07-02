@@ -1,0 +1,39 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy ZKBurn to Gnosis mainnet'
+        type: boolean
+        default: false
+
+jobs:
+  ci:
+    uses: BreadchainCoop/etherform/.github/workflows/_ci.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      check-formatting: true
+      test-verbosity: 'vv'
+
+  # Gnosis mainnet deploy — manual trigger only (spends real xDAI from the deployer key).
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    uses: BreadchainCoop/etherform/.github/workflows/_deploy-testnet.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      deploy-script: 'contracts/script/Deploy.s.sol:Deploy'
+      network-config-path: '.github/deploy-networks.json'
+      network-index: 0
+      indexing-wait: 60
+      verify-contracts: true
+    secrets:
+      PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      RPC_URL: ${{ secrets.RPC_URL }}

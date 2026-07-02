@@ -1,0 +1,12 @@
+[profile.default]
+src = "contracts/src"
+test = "contracts/test"
+script = "contracts/script"
+out = "out"
+libs = ["contracts/lib"]
+build_info = true
+extra_output = ["storageLayout"]
+fs_permissions = [{ access = "read", path = "./" }]
+
+[rpc_endpoints]
+gnosis = "https://rpc.gnosischain.com"
