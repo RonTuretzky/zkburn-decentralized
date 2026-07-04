@@ -20,7 +20,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { WalletFooter } from "@/components/wallet-footer";
-import { isContractConfigured } from "@/lib/chain";
+import { APP_BASE_PATH, isContractConfigured } from "@/lib/chain";
 import { useBurner } from "@/lib/wallet";
 import {
   burnJohn,
@@ -147,7 +147,7 @@ export default function WorkerDashboard() {
     try {
       const { id: interactionId } = await proposeInteraction(walletClient, account, id);
       setInteractionUrl(
-        `${window.location.origin}/authorize-interaction?id=${interactionId.toString()}`,
+        `${window.location.origin}${APP_BASE_PATH}/authorize-interaction/?id=${interactionId.toString()}`,
       );
       setRequestResult({
         kind: "success",

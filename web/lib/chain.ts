@@ -28,6 +28,9 @@ export const ZKPASSPORT_DEVMODE =
 
 export const ZKBURN_SCOPE = "zkburn-v1";
 
+/** Subpath the app is served from (e.g. "/zkburn-decentralized" on GitHub Pages; "" locally). */
+export const APP_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 export const BLOCKSCOUT_URL = "https://gnosis.blockscout.com";
 
 export const contractExplorerUrl = `${BLOCKSCOUT_URL}/address/${ZKBURN_ADDRESS}`;
