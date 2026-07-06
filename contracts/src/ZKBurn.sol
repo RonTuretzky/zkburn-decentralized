@@ -5,89 +5,116 @@ import {IZKPassportVerifier, ProofVerificationParams} from "./interfaces/IZKPass
 
 /// @title ZKBurn
 /// @notice Mutual-consent reputation registry for anonymous clients ("Johns").
-///         A John proves personhood with zkPassport; the scoped nullifier becomes
-///         their JohnID. Workers propose interactions, the John confirms from the
-///         wallet bound in the proof, and each confirmed interaction grants that
-///         worker one burn (flag with note) and one vouch for that JohnID.
-/// @dev Fully permissionless: no owner, no admin, no upgradeability.
-///      If the zkPassport verifier has no code at the configured address (e.g. Gnosis
+///         Both parties prove personhood with zkPassport; the scoped nullifier
+///         becomes their identity id. A worker proposes an interaction, the John
+///         confirms it from the wallet bound in their proof, and each confirmed
+///         interaction grants that worker one burn (flag) and one vouch — each
+///         retractable by its author.
+/// @dev Fully permissionless: no owner, no admin, no upgradeability. If the
+///      zkPassport verifier has no code at the configured address (e.g. Gnosis
 ///      Chain today), registration proceeds optimistically with `zkVerified = false`.
 contract ZKBurn {
     // ---------------------------------------------------------------------
     // Errors
     // ---------------------------------------------------------------------
 
-    /// @notice Caller has no confirmed, unused interaction with the JohnID.
-    error NoUsableInteraction();
-    /// @notice Proof service scope/subscope does not match this contract's configuration.
-    error ScopeMismatch();
-    /// @notice Proof timestamp is outside the accepted validity window.
-    error ProofExpired();
-    /// @notice JohnID is already registered.
+    /// @notice Caller is not a registered identity.
+    error NotRegistered();
+    /// @notice This nullifier is already registered.
     error AlreadyRegistered();
-    /// @notice Caller is not the wallet bound to the interaction's JohnID.
+    /// @notice Caller wallet is already bound to an identity.
+    error AlreadyBound();
+    /// @notice The referenced John is not registered.
+    error UnknownJohn();
+    /// @notice Worker and John cannot be the same identity.
+    error SelfInteraction();
+    /// @notice Caller is not the John bound to the interaction.
     error NotJohn();
+    /// @notice Caller is not the worker who owns the interaction.
+    error NotWorker();
+    /// @notice Interaction has not been confirmed by the John.
+    error NotConfirmed();
     /// @notice Interaction has already been confirmed.
     error AlreadyConfirmed();
-    /// @notice JohnID is not registered.
-    error UnknownJohn();
+    /// @notice A burn was already issued for this interaction.
+    error BurnAlreadyUsed();
+    /// @notice A vouch was already issued for this interaction.
+    error VouchAlreadyUsed();
+    /// @notice No active burn to retract for this interaction.
+    error NotBurned();
+    /// @notice No active vouch to retract for this interaction.
+    error NotVouched();
+    /// @notice Proof service scope/subscope does not match this contract.
+    error ScopeMismatch();
+    /// @notice Proof service config domain does not match this contract.
+    error DomainMismatch();
+    /// @notice Proof timestamp is outside the accepted validity window.
+    error ProofExpired();
     /// @notice The zkPassport verifier rejected the proof.
     error InvalidProof();
     /// @notice Verifier-returned unique identifier does not match the proof's nullifier.
     error NullifierMismatch();
-    /// @notice Caller wallet is already bound to a JohnID.
-    error AlreadyBound();
     /// @notice Proof public inputs are malformed (too short or zero nullifier).
     error InvalidPublicInputs();
-    /// @notice Proof service config domain does not match this contract's domain.
-    error DomainMismatch();
 
     // ---------------------------------------------------------------------
     // Types
     // ---------------------------------------------------------------------
 
-    /// @notice A registered anonymous client.
-    struct John {
+    /// @notice A registered, zkPassport-unique identity (a John or a worker).
+    struct Identity {
         address account;
         uint64 registeredAt;
         bool zkVerified;
         bool devMode;
-        uint32 burnCount;
-        uint32 vouchCount;
     }
 
     /// @notice A worker-proposed, John-confirmed interaction.
     struct Interaction {
+        bytes32 workerId;
         bytes32 johnId;
-        address worker;
         uint64 proposedAt;
         uint64 confirmedAt;
-        bool burnUsed;
+        bool burnUsed; // a burn was issued for this interaction (permanent; blocks re-burn)
         bool vouchUsed;
     }
 
-    /// @notice A burn or vouch record.
+    /// @notice A burn or vouch record (retained even after retraction for auditability).
     struct ActionRecord {
-        address worker;
-        uint64 timestamp;
+        bytes32 workerId;
         uint256 interactionId;
+        uint64 timestamp;
+        bool retracted;
         string note;
+    }
+
+    /// @notice Aggregate reputation for a John.
+    struct Reputation {
+        bool exists;
+        uint32 burnCount; // active (non-retracted) burns
+        uint32 vouchCount; // active (non-retracted) vouches
+        uint32 distinctBurners; // distinct workers with >= 1 active burn
+        uint32 distinctVouchers; // distinct workers with >= 1 active vouch
     }
 
     // ---------------------------------------------------------------------
     // Events
     // ---------------------------------------------------------------------
 
-    /// @notice Emitted when a new John registers.
-    event JohnRegistered(bytes32 indexed johnId, address indexed account, bool zkVerified, bool devMode);
+    /// @notice Emitted when a new identity registers.
+    event Registered(bytes32 indexed id, address indexed account, bool zkVerified, bool devMode);
     /// @notice Emitted when a worker proposes an interaction.
-    event InteractionProposed(uint256 indexed id, bytes32 indexed johnId, address indexed worker);
+    event InteractionProposed(uint256 indexed id, bytes32 indexed johnId, bytes32 indexed workerId, address worker);
     /// @notice Emitted when the bound John confirms an interaction.
-    event InteractionConfirmed(uint256 indexed id, bytes32 indexed johnId, address indexed worker);
-    /// @notice Emitted when a worker burns a JohnID.
-    event JohnBurned(bytes32 indexed johnId, address indexed worker, uint256 indexed interactionId, string note);
-    /// @notice Emitted when a worker vouches for a JohnID.
-    event JohnVouched(bytes32 indexed johnId, address indexed worker, uint256 indexed interactionId, string note);
+    event InteractionConfirmed(uint256 indexed id, bytes32 indexed johnId, bytes32 indexed workerId);
+    /// @notice Emitted when a worker burns a John via an interaction.
+    event Burned(bytes32 indexed johnId, bytes32 indexed workerId, uint256 indexed interactionId, string note);
+    /// @notice Emitted when a worker retracts their own burn.
+    event BurnRetracted(bytes32 indexed johnId, bytes32 indexed workerId, uint256 indexed interactionId);
+    /// @notice Emitted when a worker vouches for a John via an interaction.
+    event Vouched(bytes32 indexed johnId, bytes32 indexed workerId, uint256 indexed interactionId, string note);
+    /// @notice Emitted when a worker retracts their own vouch.
+    event VouchRetracted(bytes32 indexed johnId, bytes32 indexed workerId, uint256 indexed interactionId);
 
     // ---------------------------------------------------------------------
     // Configuration
@@ -96,7 +123,7 @@ contract ZKBurn {
     /// @notice Maximum accepted proof validity period.
     uint256 public constant MAX_VALIDITY = 7 days;
 
-    /// @notice The zkPassport RootVerifier (may have no code on chains where it is not yet deployed).
+    /// @notice The zkPassport RootVerifier (may have no code where not yet deployed).
     IZKPassportVerifier public immutable zkPassportVerifier;
 
     /// @notice The zkPassport service domain this contract accepts proofs for.
@@ -113,20 +140,32 @@ contract ZKBurn {
     // Storage
     // ---------------------------------------------------------------------
 
-    /// @notice JohnID => John record.
-    mapping(bytes32 => John) public johns;
-    /// @notice Bound wallet => JohnID (zero if unbound).
-    mapping(address => bytes32) public johnIdOf;
+    /// @notice Identity id => identity record.
+    mapping(bytes32 => Identity) public identities;
+    /// @notice Bound wallet => identity id (zero if unbound).
+    mapping(address => bytes32) public idOf;
+
     /// @notice All interactions, indexed by id.
     Interaction[] internal interactions;
-    /// @notice JohnID => interaction ids referencing it.
+    /// @notice John id => interaction ids referencing them.
     mapping(bytes32 => uint256[]) internal johnInteractionIds;
-    /// @notice Worker => interaction ids they proposed.
-    mapping(address => uint256[]) internal workerInteractionIds;
-    /// @notice JohnID => burn records.
+    /// @notice Worker id => interaction ids they proposed.
+    mapping(bytes32 => uint256[]) internal workerInteractionIds;
+
+    /// @notice John id => aggregate reputation.
+    mapping(bytes32 => Reputation) internal reps;
+    /// @notice John id => burn records.
     mapping(bytes32 => ActionRecord[]) internal burnsOf;
-    /// @notice JohnID => vouch records.
+    /// @notice John id => vouch records.
     mapping(bytes32 => ActionRecord[]) internal vouchesOf;
+    /// @notice interaction id => 1-based index into burnsOf[johnId] (0 = none).
+    mapping(uint256 => uint256) internal burnRecordPtr;
+    /// @notice interaction id => 1-based index into vouchesOf[johnId] (0 = none).
+    mapping(uint256 => uint256) internal vouchRecordPtr;
+    /// @notice John id => worker id => active burn count (for distinct-burner tracking).
+    mapping(bytes32 => mapping(bytes32 => uint32)) internal activeBurnsBy;
+    /// @notice John id => worker id => active vouch count.
+    mapping(bytes32 => mapping(bytes32 => uint32)) internal activeVouchesBy;
 
     // ---------------------------------------------------------------------
     // Constructor
@@ -147,14 +186,13 @@ contract ZKBurn {
     // Registration
     // ---------------------------------------------------------------------
 
-    /// @notice Registers the caller as a John using a zkPassport proof.
+    /// @notice Registers the caller as a zkPassport-unique identity (John or worker).
     /// @dev If the verifier address has no code (e.g. Gnosis Chain today), the proof's
-    ///      structure is still validated but registration proceeds optimistically with
-    ///      `zkVerified = false`. When zkPassport deploys the verifier, verification
-    ///      becomes automatic.
-    /// @param params The zkPassport Solidity verifier parameters (from getSolidityVerifierParameters).
-    /// @return johnId The scoped nullifier, now bound to msg.sender.
-    function registerJohn(ProofVerificationParams calldata params) external returns (bytes32 johnId) {
+    ///      scope binding and freshness are still enforced but registration proceeds
+    ///      optimistically with `zkVerified = false`.
+    /// @param params The zkPassport Solidity verifier parameters.
+    /// @return id The scoped nullifier, now bound to msg.sender.
+    function register(ProofVerificationParams calldata params) external returns (bytes32 id) {
         bytes32[] calldata publicInputs = params.proofVerificationData.publicInputs;
         uint256 len = publicInputs.length;
         if (len < 8) revert InvalidPublicInputs();
@@ -170,55 +208,59 @@ contract ZKBurn {
             revert ScopeMismatch();
         }
 
-        // Freshness: proof date must not be in the far future nor older than the
-        // validity period (capped at MAX_VALIDITY).
+        // Freshness: proof date must be recent (capped at MAX_VALIDITY) and not far-future.
         uint256 ts = uint256(publicInputs[2]);
         if (ts > block.timestamp + 1 days) revert ProofExpired();
         uint256 validity = params.serviceConfig.validityPeriodInSeconds;
         if (validity > MAX_VALIDITY) validity = MAX_VALIDITY;
         if (ts + validity < block.timestamp) revert ProofExpired();
 
-        johnId = publicInputs[len - 2];
-        if (johnId == bytes32(0)) revert InvalidPublicInputs();
-        if (johns[johnId].registeredAt != 0) revert AlreadyRegistered();
-        if (johnIdOf[msg.sender] != bytes32(0)) revert AlreadyBound();
+        id = publicInputs[len - 2];
+        if (id == bytes32(0)) revert InvalidPublicInputs();
+        if (identities[id].registeredAt != 0) revert AlreadyRegistered();
+        if (idOf[msg.sender] != bytes32(0)) revert AlreadyBound();
 
         bool zkVerified;
         if (address(zkPassportVerifier).code.length > 0) {
             (bool verified, bytes32 uniqueIdentifier,) = zkPassportVerifier.verify(params);
             if (!verified) revert InvalidProof();
-            if (uniqueIdentifier != johnId) revert NullifierMismatch();
+            if (uniqueIdentifier != id) revert NullifierMismatch();
             zkVerified = true;
         }
 
-        johns[johnId] = John({
+        identities[id] = Identity({
             account: msg.sender,
             registeredAt: uint64(block.timestamp),
             zkVerified: zkVerified,
-            devMode: params.serviceConfig.devMode,
-            burnCount: 0,
-            vouchCount: 0
+            devMode: params.serviceConfig.devMode
         });
-        johnIdOf[msg.sender] = johnId;
+        idOf[msg.sender] = id;
 
-        emit JohnRegistered(johnId, msg.sender, zkVerified, params.serviceConfig.devMode);
+        emit Registered(id, msg.sender, zkVerified, params.serviceConfig.devMode);
     }
 
     // ---------------------------------------------------------------------
     // Interactions
     // ---------------------------------------------------------------------
 
-    /// @notice Proposes an interaction with a registered JohnID. Callable by any worker.
-    /// @param johnId The JohnID to interact with.
+    /// @notice Proposes an interaction with a registered John. Caller must be a
+    ///         registered worker; the interaction is credited to their identity.
+    /// @param johnId The John to interact with.
     /// @return id The new interaction id.
     function proposeInteraction(bytes32 johnId) external returns (uint256 id) {
-        if (johns[johnId].registeredAt == 0) revert UnknownJohn();
+        bytes32 workerId = idOf[msg.sender];
+        if (workerId == bytes32(0)) revert NotRegistered();
+        if (identities[johnId].registeredAt == 0) revert UnknownJohn();
+        if (workerId == johnId) revert SelfInteraction();
+
+        // Lazily mark reputation as existing on first reference.
+        if (!reps[johnId].exists) reps[johnId].exists = true;
 
         id = interactions.length;
         interactions.push(
             Interaction({
+                workerId: workerId,
                 johnId: johnId,
-                worker: msg.sender,
                 proposedAt: uint64(block.timestamp),
                 confirmedAt: 0,
                 burnUsed: false,
@@ -226,97 +268,145 @@ contract ZKBurn {
             })
         );
         johnInteractionIds[johnId].push(id);
-        workerInteractionIds[msg.sender].push(id);
+        workerInteractionIds[workerId].push(id);
 
-        emit InteractionProposed(id, johnId, msg.sender);
+        emit InteractionProposed(id, johnId, workerId, msg.sender);
     }
 
-    /// @notice Confirms an interaction. Only callable by the wallet bound to the interaction's JohnID.
+    /// @notice Confirms an interaction. Only callable by the wallet bound to the John.
     /// @param id The interaction id to confirm.
     function confirmInteraction(uint256 id) external {
         Interaction storage it = interactions[id];
-        if (msg.sender != johns[it.johnId].account) revert NotJohn();
+        if (msg.sender != identities[it.johnId].account) revert NotJohn();
         if (it.confirmedAt != 0) revert AlreadyConfirmed();
 
         it.confirmedAt = uint64(block.timestamp);
 
-        emit InteractionConfirmed(id, it.johnId, it.worker);
+        emit InteractionConfirmed(id, it.johnId, it.workerId);
     }
 
     // ---------------------------------------------------------------------
     // Burn / vouch
     // ---------------------------------------------------------------------
 
-    /// @notice Burns (flags) a JohnID. Consumes the caller's oldest confirmed,
-    ///         burn-unused interaction with that JohnID.
-    /// @param johnId The JohnID to burn.
-    /// @param note Free-text note explaining the burn.
-    function burn(bytes32 johnId, string calldata note) external {
-        if (johns[johnId].registeredAt == 0) revert UnknownJohn();
+    /// @notice Burns (flags) a John via a specific confirmed interaction the caller owns.
+    /// @param interactionId The interaction to consume the burn slot of.
+    /// @param note Free-text note explaining the burn (public, immutable).
+    function burn(uint256 interactionId, string calldata note) external {
+        Interaction storage it = interactions[interactionId];
+        bytes32 workerId = idOf[msg.sender];
+        if (workerId == bytes32(0) || it.workerId != workerId) revert NotWorker();
+        if (it.confirmedAt == 0) revert NotConfirmed();
+        if (it.burnUsed) revert BurnAlreadyUsed();
 
-        uint256 interactionId = _consumeInteraction(johnId, true);
-        johns[johnId].burnCount++;
+        it.burnUsed = true;
+        bytes32 johnId = it.johnId;
+
+        Reputation storage rep = reps[johnId];
+        rep.burnCount++;
+        if (activeBurnsBy[johnId][workerId]++ == 0) rep.distinctBurners++;
+
         burnsOf[johnId].push(
             ActionRecord({
-                worker: msg.sender, timestamp: uint64(block.timestamp), interactionId: interactionId, note: note
+                workerId: workerId,
+                interactionId: interactionId,
+                timestamp: uint64(block.timestamp),
+                retracted: false,
+                note: note
             })
         );
+        burnRecordPtr[interactionId] = burnsOf[johnId].length; // 1-based
 
-        emit JohnBurned(johnId, msg.sender, interactionId, note);
+        emit Burned(johnId, workerId, interactionId, note);
     }
 
-    /// @notice Vouches for a JohnID. Consumes the caller's oldest confirmed,
-    ///         vouch-unused interaction with that JohnID.
-    /// @param johnId The JohnID to vouch for.
-    /// @param note Free-text note (may be empty).
-    function vouch(bytes32 johnId, string calldata note) external {
-        if (johns[johnId].registeredAt == 0) revert UnknownJohn();
+    /// @notice Retracts the caller's own burn on an interaction. The record is kept
+    ///         (marked retracted) so history stays auditable; the burn cannot be re-issued.
+    /// @param interactionId The interaction whose burn to retract.
+    function retractBurn(uint256 interactionId) external {
+        Interaction storage it = interactions[interactionId];
+        bytes32 workerId = idOf[msg.sender];
+        if (workerId == bytes32(0) || it.workerId != workerId) revert NotWorker();
 
-        uint256 interactionId = _consumeInteraction(johnId, false);
-        johns[johnId].vouchCount++;
+        bytes32 johnId = it.johnId;
+        uint256 ptr = burnRecordPtr[interactionId];
+        if (ptr == 0 || burnsOf[johnId][ptr - 1].retracted) revert NotBurned();
+
+        burnsOf[johnId][ptr - 1].retracted = true;
+
+        Reputation storage rep = reps[johnId];
+        rep.burnCount--;
+        if (--activeBurnsBy[johnId][workerId] == 0) rep.distinctBurners--;
+
+        emit BurnRetracted(johnId, workerId, interactionId);
+    }
+
+    /// @notice Vouches for a John via a specific confirmed interaction the caller owns.
+    /// @param interactionId The interaction to consume the vouch slot of.
+    /// @param note Free-text note (may be empty; public, immutable).
+    function vouch(uint256 interactionId, string calldata note) external {
+        Interaction storage it = interactions[interactionId];
+        bytes32 workerId = idOf[msg.sender];
+        if (workerId == bytes32(0) || it.workerId != workerId) revert NotWorker();
+        if (it.confirmedAt == 0) revert NotConfirmed();
+        if (it.vouchUsed) revert VouchAlreadyUsed();
+
+        it.vouchUsed = true;
+        bytes32 johnId = it.johnId;
+
+        Reputation storage rep = reps[johnId];
+        rep.vouchCount++;
+        if (activeVouchesBy[johnId][workerId]++ == 0) rep.distinctVouchers++;
+
         vouchesOf[johnId].push(
             ActionRecord({
-                worker: msg.sender, timestamp: uint64(block.timestamp), interactionId: interactionId, note: note
+                workerId: workerId,
+                interactionId: interactionId,
+                timestamp: uint64(block.timestamp),
+                retracted: false,
+                note: note
             })
         );
+        vouchRecordPtr[interactionId] = vouchesOf[johnId].length; // 1-based
 
-        emit JohnVouched(johnId, msg.sender, interactionId, note);
+        emit Vouched(johnId, workerId, interactionId, note);
     }
 
-    /// @dev Finds and marks the caller's oldest confirmed interaction with `johnId`
-    ///      whose burn/vouch slot is unused. Reverts with NoUsableInteraction if none.
-    function _consumeInteraction(bytes32 johnId, bool forBurn) internal returns (uint256) {
-        uint256[] storage ids = workerInteractionIds[msg.sender];
-        uint256 count = ids.length;
-        for (uint256 i = 0; i < count; i++) {
-            uint256 id = ids[i];
-            Interaction storage it = interactions[id];
-            if (it.johnId != johnId || it.confirmedAt == 0) continue;
-            if (forBurn) {
-                if (it.burnUsed) continue;
-                it.burnUsed = true;
-            } else {
-                if (it.vouchUsed) continue;
-                it.vouchUsed = true;
-            }
-            return id;
-        }
-        revert NoUsableInteraction();
+    /// @notice Retracts the caller's own vouch on an interaction.
+    /// @param interactionId The interaction whose vouch to retract.
+    function retractVouch(uint256 interactionId) external {
+        Interaction storage it = interactions[interactionId];
+        bytes32 workerId = idOf[msg.sender];
+        if (workerId == bytes32(0) || it.workerId != workerId) revert NotWorker();
+
+        bytes32 johnId = it.johnId;
+        uint256 ptr = vouchRecordPtr[interactionId];
+        if (ptr == 0 || vouchesOf[johnId][ptr - 1].retracted) revert NotVouched();
+
+        vouchesOf[johnId][ptr - 1].retracted = true;
+
+        Reputation storage rep = reps[johnId];
+        rep.vouchCount--;
+        if (--activeVouchesBy[johnId][workerId] == 0) rep.distinctVouchers--;
+
+        emit VouchRetracted(johnId, workerId, interactionId);
     }
 
     // ---------------------------------------------------------------------
     // Views
     // ---------------------------------------------------------------------
 
-    /// @notice Returns the reputation status of a JohnID.
-    /// @param johnId The JohnID to check.
-    /// @return exists True if the JohnID is registered.
+    /// @notice Returns the reputation status of a John.
+    /// @param johnId The John to check.
+    /// @return exists True if the John is registered.
     /// @return zkVerified True if registration was verified on-chain by zkPassport.
     /// @return devMode True if the registration proof was generated in dev mode.
-    /// @return isBurned True if the JohnID has at least one burn.
-    /// @return burnCount Number of burns.
-    /// @return vouchCount Number of vouches.
-    /// @return lastBurnNote Note of the most recent burn ("" if none).
+    /// @return isBurned True if the John has at least one active burn.
+    /// @return burnCount Number of active burns.
+    /// @return vouchCount Number of active vouches.
+    /// @return distinctBurners Number of distinct workers with an active burn.
+    /// @return distinctVouchers Number of distinct workers with an active vouch.
+    /// @return lastBurnNote Note of the most recent active burn ("" if none).
     function checkStatus(bytes32 johnId)
         external
         view
@@ -327,34 +417,43 @@ contract ZKBurn {
             bool isBurned,
             uint32 burnCount,
             uint32 vouchCount,
+            uint32 distinctBurners,
+            uint32 distinctVouchers,
             string memory lastBurnNote
         )
     {
-        John storage j = johns[johnId];
-        exists = j.registeredAt != 0;
-        zkVerified = j.zkVerified;
-        devMode = j.devMode;
-        burnCount = j.burnCount;
-        vouchCount = j.vouchCount;
+        Identity storage idn = identities[johnId];
+        exists = idn.registeredAt != 0;
+        zkVerified = idn.zkVerified;
+        devMode = idn.devMode;
+
+        Reputation storage rep = reps[johnId];
+        burnCount = rep.burnCount;
+        vouchCount = rep.vouchCount;
+        distinctBurners = rep.distinctBurners;
+        distinctVouchers = rep.distinctVouchers;
         isBurned = burnCount > 0;
-        ActionRecord[] storage burnRecords = burnsOf[johnId];
-        lastBurnNote = burnRecords.length > 0 ? burnRecords[burnRecords.length - 1].note : "";
+
+        ActionRecord[] storage records = burnsOf[johnId];
+        for (uint256 i = records.length; i > 0; i--) {
+            if (!records[i - 1].retracted) {
+                lastBurnNote = records[i - 1].note;
+                break;
+            }
+        }
     }
 
-    /// @notice Returns all burn records for a JohnID.
-    /// @param johnId The JohnID.
+    /// @notice Returns all burn records for a John (including retracted ones).
     function getBurns(bytes32 johnId) external view returns (ActionRecord[] memory) {
         return burnsOf[johnId];
     }
 
-    /// @notice Returns all vouch records for a JohnID.
-    /// @param johnId The JohnID.
+    /// @notice Returns all vouch records for a John (including retracted ones).
     function getVouches(bytes32 johnId) external view returns (ActionRecord[] memory) {
         return vouchesOf[johnId];
     }
 
     /// @notice Returns an interaction by id.
-    /// @param id The interaction id.
     function getInteraction(uint256 id) external view returns (Interaction memory) {
         return interactions[id];
     }
@@ -364,32 +463,39 @@ contract ZKBurn {
         return interactions.length;
     }
 
-    /// @notice Returns all interaction ids referencing a JohnID.
-    /// @param johnId The JohnID.
+    /// @notice Returns all interaction ids referencing a John.
     function getJohnInteractions(bytes32 johnId) external view returns (uint256[] memory) {
         return johnInteractionIds[johnId];
     }
 
     /// @notice Returns all interaction ids proposed by a worker.
-    /// @param worker The worker address.
-    function getWorkerInteractions(address worker) external view returns (uint256[] memory) {
-        return workerInteractionIds[worker];
+    function getWorkerInteractions(bytes32 workerId) external view returns (uint256[] memory) {
+        return workerInteractionIds[workerId];
     }
 
-    /// @notice Whether a worker currently has a usable interaction to burn/vouch a JohnID.
-    /// @param worker The worker address.
-    /// @param johnId The JohnID.
-    /// @return canBurn True if the worker has a confirmed, burn-unused interaction.
-    /// @return canVouch True if the worker has a confirmed, vouch-unused interaction.
-    function canAct(address worker, bytes32 johnId) external view returns (bool canBurn, bool canVouch) {
-        uint256[] storage ids = workerInteractionIds[worker];
-        uint256 count = ids.length;
-        for (uint256 i = 0; i < count; i++) {
-            Interaction storage it = interactions[ids[i]];
-            if (it.johnId != johnId || it.confirmedAt == 0) continue;
-            if (!it.burnUsed) canBurn = true;
-            if (!it.vouchUsed) canVouch = true;
-            if (canBurn && canVouch) break;
+    /// @notice O(1) capability check for a specific interaction and caller.
+    /// @param interactionId The interaction id.
+    /// @param caller The prospective actor (must be the interaction's worker).
+    /// @return canBurn True if the caller can currently burn via this interaction.
+    /// @return canVouch True if the caller can currently vouch via this interaction.
+    /// @return canRetractBurn True if the caller can retract an active burn on it.
+    /// @return canRetractVouch True if the caller can retract an active vouch on it.
+    function interactionCapabilities(uint256 interactionId, address caller)
+        external
+        view
+        returns (bool canBurn, bool canVouch, bool canRetractBurn, bool canRetractVouch)
+    {
+        if (interactionId >= interactions.length) return (false, false, false, false);
+        Interaction storage it = interactions[interactionId];
+        bytes32 workerId = idOf[caller];
+        if (workerId == bytes32(0) || it.workerId != workerId || it.confirmedAt == 0) {
+            return (false, false, false, false);
         }
+        canBurn = !it.burnUsed;
+        canVouch = !it.vouchUsed;
+        uint256 bptr = burnRecordPtr[interactionId];
+        canRetractBurn = bptr != 0 && !burnsOf[it.johnId][bptr - 1].retracted;
+        uint256 vptr = vouchRecordPtr[interactionId];
+        canRetractVouch = vptr != 0 && !vouchesOf[it.johnId][vptr - 1].retracted;
     }
 }
