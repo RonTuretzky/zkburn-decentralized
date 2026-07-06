@@ -11,20 +11,23 @@ on:
         type: boolean
         default: false
 
+# etherform is pinned to a specific commit: its `main` was overhauled (breaking the
+# reusable-workflow contract). 4e78fbb is the revision this project was built against.
 jobs:
   ci:
-    uses: BreadchainCoop/etherform/.github/workflows/_ci.yml@main
+    uses: BreadchainCoop/etherform/.github/workflows/_ci.yml@4e78fbb
     permissions:
       contents: read
       pull-requests: write
     with:
       check-formatting: true
       test-verbosity: 'vv'
+      etherform-ref: '4e78fbb'
 
   # Gnosis mainnet deploy — manual trigger only (spends real xDAI from the deployer key).
   deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.deploy
-    uses: BreadchainCoop/etherform/.github/workflows/_deploy-testnet.yml@main
+    uses: BreadchainCoop/etherform/.github/workflows/_deploy-testnet.yml@4e78fbb
     permissions:
       contents: read
       pull-requests: write
@@ -34,6 +37,7 @@ jobs:
       network-index: 0
       indexing-wait: 60
       verify-contracts: true
+      etherform-ref: '4e78fbb'
     secrets:
       PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
       RPC_URL: ${{ secrets.RPC_URL }}
