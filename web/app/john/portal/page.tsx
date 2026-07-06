@@ -30,9 +30,9 @@ import {
   confirmInteraction,
   friendlyError,
   getInteraction,
-  getJohnIdOf,
+  getIdOf,
   getJohnInteractions,
-  registerJohn,
+  register,
   checkStatus,
   type Interaction,
   type JohnStatus,
@@ -59,7 +59,7 @@ function JohnPortal() {
   // Recover an existing registration for this burner wallet.
   useEffect(() => {
     if (!address || !isContractConfigured) return;
-    getJohnIdOf(address)
+    getIdOf(address)
       .then((id) => id && setJohnId(id))
       .catch(() => {});
   }, [address]);
@@ -89,12 +89,12 @@ function JohnPortal() {
   }, [johnId, refresh]);
 
   const submitParams = useCallback(
-    async (params: Parameters<typeof registerJohn>[2]) => {
+    async (params: Parameters<typeof register>[2]) => {
       if (!walletClient || !account) return;
       setSubmitting(true);
       setError(null);
       try {
-        const { johnId: newId } = await registerJohn(walletClient, account, params);
+        const { id: newId } = await register(walletClient, account, params);
         setJohnId(newId);
         setReg({ phase: "idle" });
       } catch (e) {
@@ -303,7 +303,7 @@ function JohnPortal() {
                       <div className="min-w-0">
                         <p className="text-gray-300">Interaction #{id.toString()}</p>
                         <p className="truncate font-mono text-xs text-gray-500">
-                          Worker {interaction.worker}
+                          Worker {interaction.workerId}
                         </p>
                       </div>
                       <Button

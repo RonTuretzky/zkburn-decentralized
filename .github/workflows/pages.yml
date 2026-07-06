@@ -28,10 +28,10 @@ jobs:
       # Project site is served from https://<user>.github.io/<repo>/
       NEXT_PUBLIC_BASE_PATH: /zkburn-decentralized
       STATIC_EXPORT: "true"
-      # Live, verified ZKBurn contract on Gnosis mainnet.
-      NEXT_PUBLIC_ZKBURN_ADDRESS: "0x772fA3dde14AAEeCD3c98E9b26E07a9afFfC46b4"
-      # Public RPC + demo mode so the site is fully explorable without any secrets.
-      NEXT_PUBLIC_RPC_URL: https://rpc.gnosischain.com
+      # Live, verified ZKBurn V2 contract on Gnosis mainnet.
+      NEXT_PUBLIC_ZKBURN_ADDRESS: "0xE8bE1A3C20a484c66668c500E6306968f92ceb88"
+      # CORS-friendly public RPC + demo mode so the site is fully explorable without any secrets.
+      NEXT_PUBLIC_RPC_URL: https://gnosis-rpc.publicnode.com
       NEXT_PUBLIC_DEMO_MODE: "1"
       NEXT_PUBLIC_ZKPASSPORT_DEVMODE: "true"
     steps:

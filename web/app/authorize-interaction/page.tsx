@@ -18,7 +18,7 @@ import {
   confirmInteraction,
   friendlyError,
   getInteraction,
-  getJohnIdOf,
+  getIdOf,
   type Interaction,
 } from "@/lib/zkburn";
 
@@ -60,7 +60,7 @@ function AuthorizeInteraction() {
           setPhase({ kind: "error", message: "This interaction has already been authorized." });
           return;
         }
-        const myJohnId = await getJohnIdOf(address);
+        const myJohnId = await getIdOf(address);
         if (!myJohnId || myJohnId.toLowerCase() !== interaction.johnId.toLowerCase()) {
           setPhase({ kind: "not-yours", interaction });
           return;
@@ -108,7 +108,7 @@ function AuthorizeInteraction() {
               <p className="text-sm text-gray-400">
                 Worker{" "}
                 <span className="break-all font-mono text-gray-300">
-                  {phase.interaction.worker}
+                  {phase.interaction.workerId}
                 </span>{" "}
                 requests to log an interaction with your JohnID.
               </p>

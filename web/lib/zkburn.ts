@@ -34,36 +34,61 @@ export type JohnStatus = {
   isBurned: boolean;
   burnCount: number;
   vouchCount: number;
+  distinctBurners: number;
+  distinctVouchers: number;
   lastBurnNote: string;
 };
 
 export type Interaction = {
+  workerId: `0x${string}`;
   johnId: `0x${string}`;
-  worker: `0x${string}`;
   proposedAt: bigint;
   confirmedAt: bigint;
   burnUsed: boolean;
   vouchUsed: boolean;
 };
 
-/** Maps contract custom errors to the site's user-facing alert copy. */
+export type InteractionCapabilities = {
+  canBurn: boolean;
+  canVouch: boolean;
+  canRetractBurn: boolean;
+  canRetractVouch: boolean;
+};
+
+const ZERO = `0x${"0".repeat(64)}` as const;
+
+/** Maps contract custom errors to user-facing alert copy. */
 export function friendlyError(err: unknown, action?: "burn" | "vouch"): string {
   if (err instanceof BaseError) {
     const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);
     if (revert instanceof ContractFunctionRevertedError) {
       switch (revert.data?.errorName) {
-        case "NoUsableInteraction":
-          return `Cannot ${action ?? "act"}. No prior interaction recorded by you for this JohnID.`;
+        case "NotRegistered":
+          return "You must register as a worker before recording interactions.";
+        case "NotWorker":
+          return `Cannot ${action ?? "act"}. This interaction was not recorded by you.`;
+        case "NotConfirmed":
+          return "This interaction hasn't been confirmed by the client yet.";
+        case "BurnAlreadyUsed":
+          return "You have already burned this interaction.";
+        case "VouchAlreadyUsed":
+          return "You have already vouched for this interaction.";
+        case "NotBurned":
+          return "There is no active burn to retract on this interaction.";
+        case "NotVouched":
+          return "There is no active vouch to retract on this interaction.";
         case "AlreadyRegistered":
           return "This passport identity is already registered.";
         case "AlreadyBound":
-          return "This wallet is already bound to a JohnID.";
+          return "This wallet is already bound to an identity.";
         case "AlreadyConfirmed":
           return "This interaction has already been authorized.";
         case "UnknownJohn":
-          return "Unknown JohnID.";
+          return "Unknown JohnID — the client must register first.";
+        case "SelfInteraction":
+          return "You cannot record an interaction with your own ID.";
         case "NotJohn":
-          return "Only the John who owns this ID can authorize the interaction.";
+          return "Only the client who owns this ID can authorize the interaction.";
         case "ScopeMismatch":
           return "Proof scope mismatch — this proof was not generated for ZKBurn.";
         case "DomainMismatch":
@@ -86,10 +111,19 @@ export function friendlyError(err: unknown, action?: "burn" | "vouch"): string {
   return err instanceof Error ? err.message : "Unexpected error. Check console.";
 }
 
+type WriteFn =
+  | "register"
+  | "proposeInteraction"
+  | "confirmInteraction"
+  | "burn"
+  | "vouch"
+  | "retractBurn"
+  | "retractVouch";
+
 async function write(
   walletClient: WalletClient,
   account: PrivateKeyAccount,
-  functionName: "registerJohn" | "proposeInteraction" | "confirmInteraction" | "burn" | "vouch",
+  functionName: WriteFn,
   args: readonly unknown[],
 ): Promise<{ hash: Hash; logs: ReturnType<typeof parseEventLogs<typeof zkburnAbi>> }> {
   const { request } = await publicClient.simulateContract({
@@ -106,15 +140,15 @@ async function write(
   return { hash, logs };
 }
 
-export async function registerJohn(
+export async function register(
   walletClient: WalletClient,
   account: PrivateKeyAccount,
   params: ProofVerificationParams,
-): Promise<{ johnId: `0x${string}`; hash: Hash }> {
-  const { hash, logs } = await write(walletClient, account, "registerJohn", [params]);
-  const ev = logs.find((l) => l.eventName === "JohnRegistered");
-  if (!ev) throw new Error("JohnRegistered event missing from receipt");
-  return { johnId: (ev.args as { johnId: `0x${string}` }).johnId, hash };
+): Promise<{ id: `0x${string}`; hash: Hash }> {
+  const { hash, logs } = await write(walletClient, account, "register", [params]);
+  const ev = logs.find((l) => l.eventName === "Registered");
+  if (!ev) throw new Error("Registered event missing from receipt");
+  return { id: (ev.args as { id: `0x${string}` }).id, hash };
 }
 
 export async function proposeInteraction(
@@ -137,45 +171,83 @@ export async function confirmInteraction(
   return hash;
 }
 
-export async function burnJohn(
+export async function burn(
   walletClient: WalletClient,
   account: PrivateKeyAccount,
-  johnId: `0x${string}`,
+  interactionId: bigint,
   note: string,
 ): Promise<Hash> {
-  const { hash } = await write(walletClient, account, "burn", [johnId, note]);
+  const { hash } = await write(walletClient, account, "burn", [interactionId, note]);
   return hash;
 }
 
-export async function vouchJohn(
+export async function vouch(
   walletClient: WalletClient,
   account: PrivateKeyAccount,
-  johnId: `0x${string}`,
+  interactionId: bigint,
   note: string,
 ): Promise<Hash> {
-  const { hash } = await write(walletClient, account, "vouch", [johnId, note]);
+  const { hash } = await write(walletClient, account, "vouch", [interactionId, note]);
+  return hash;
+}
+
+export async function retractBurn(
+  walletClient: WalletClient,
+  account: PrivateKeyAccount,
+  interactionId: bigint,
+): Promise<Hash> {
+  const { hash } = await write(walletClient, account, "retractBurn", [interactionId]);
+  return hash;
+}
+
+export async function retractVouch(
+  walletClient: WalletClient,
+  account: PrivateKeyAccount,
+  interactionId: bigint,
+): Promise<Hash> {
+  const { hash } = await write(walletClient, account, "retractVouch", [interactionId]);
   return hash;
 }
 
 export async function checkStatus(johnId: `0x${string}`): Promise<JohnStatus> {
-  const [exists, zkVerified, devMode, isBurned, burnCount, vouchCount, lastBurnNote] =
-    await publicClient.readContract({
-      address: ZKBURN_ADDRESS,
-      abi: zkburnAbi,
-      functionName: "checkStatus",
-      args: [johnId],
-    });
-  return { exists, zkVerified, devMode, isBurned, burnCount, vouchCount, lastBurnNote };
+  const [
+    exists,
+    zkVerified,
+    devMode,
+    isBurned,
+    burnCount,
+    vouchCount,
+    distinctBurners,
+    distinctVouchers,
+    lastBurnNote,
+  ] = await publicClient.readContract({
+    address: ZKBURN_ADDRESS,
+    abi: zkburnAbi,
+    functionName: "checkStatus",
+    args: [johnId],
+  });
+  return {
+    exists,
+    zkVerified,
+    devMode,
+    isBurned,
+    burnCount,
+    vouchCount,
+    distinctBurners,
+    distinctVouchers,
+    lastBurnNote,
+  };
 }
 
-export async function getJohnIdOf(address: `0x${string}`): Promise<`0x${string}` | null> {
+/** Returns the identity id bound to an address, or null if unregistered. */
+export async function getIdOf(address: `0x${string}`): Promise<`0x${string}` | null> {
   const id = await publicClient.readContract({
     address: ZKBURN_ADDRESS,
     abi: zkburnAbi,
-    functionName: "johnIdOf",
+    functionName: "idOf",
     args: [address],
   });
-  return id === `0x${"0".repeat(64)}` ? null : id;
+  return id === ZERO ? null : id;
 }
 
 export async function getJohnInteractions(johnId: `0x${string}`): Promise<bigint[]> {
@@ -184,6 +256,16 @@ export async function getJohnInteractions(johnId: `0x${string}`): Promise<bigint
     abi: zkburnAbi,
     functionName: "getJohnInteractions",
     args: [johnId],
+  });
+  return [...ids];
+}
+
+export async function getWorkerInteractions(workerId: `0x${string}`): Promise<bigint[]> {
+  const ids = await publicClient.readContract({
+    address: ZKBURN_ADDRESS,
+    abi: zkburnAbi,
+    functionName: "getWorkerInteractions",
+    args: [workerId],
   });
   return [...ids];
 }
@@ -197,17 +279,17 @@ export async function getInteraction(id: bigint): Promise<Interaction> {
   });
 }
 
-export async function canAct(
-  worker: `0x${string}`,
-  johnId: `0x${string}`,
-): Promise<{ canBurn: boolean; canVouch: boolean }> {
-  const [canBurn, canVouch] = await publicClient.readContract({
+export async function interactionCapabilities(
+  interactionId: bigint,
+  caller: `0x${string}`,
+): Promise<InteractionCapabilities> {
+  const [canBurn, canVouch, canRetractBurn, canRetractVouch] = await publicClient.readContract({
     address: ZKBURN_ADDRESS,
     abi: zkburnAbi,
-    functionName: "canAct",
-    args: [worker, johnId],
+    functionName: "interactionCapabilities",
+    args: [interactionId, caller],
   });
-  return { canBurn, canVouch };
+  return { canBurn, canVouch, canRetractBurn, canRetractVouch };
 }
 
 /** Normalizes user-typed JohnID input to bytes32 hex. */
