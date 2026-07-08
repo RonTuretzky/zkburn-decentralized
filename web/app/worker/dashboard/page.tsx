@@ -320,24 +320,27 @@ export default function WorkerDashboard() {
                   <p className="text-sm text-surface-grey-2">Waiting for scan…</p>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    app="fund"
-                    variant="primary"
-                    isLoading={busyReg}
-                    showChildrenWhenLoading
-                    leftIcon={!busyReg ? <SealCheck className="h-5 w-5" weight="bold" /> : undefined}
-                    onClick={startRealRegistration}
-                    disabled={busyReg}
-                  >
-                    {busyReg ? "Registering…" : "Register My Worker ID"}
-                  </Button>
-                  {DEMO_MODE && !busyReg && (
-                    <Button app="fund" variant="secondary" onClick={() => submitRegistration(buildSimulatedParams())}>
-                      Simulate proof (dev only)
-                    </Button>
-                  )}
-                </div>
+                <Button
+                  app="fund"
+                  variant="primary"
+                  isLoading={busyReg}
+                  showChildrenWhenLoading
+                  leftIcon={!busyReg ? <SealCheck className="h-5 w-5" weight="bold" /> : undefined}
+                  onClick={startRealRegistration}
+                  disabled={busyReg}
+                >
+                  {busyReg ? "Registering…" : "Register My Worker ID"}
+                </Button>
+              )}
+              {DEMO_MODE && !registering && (
+                <Button
+                  app="fund"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => submitRegistration(buildSimulatedParams())}
+                >
+                  Simulate proof (dev only)
+                </Button>
               )}
             </CardContent>
           </Card>

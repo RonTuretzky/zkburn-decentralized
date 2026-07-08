@@ -43,9 +43,9 @@ let johnId;
 {
   const c = await newCtx("1-john-register", [["john", JOHN_PK]]);
   const { page } = c;
-  await page.goto(`${BASE_URL}/demo/`);
+  await page.goto(`${BASE_URL}/app/`);
   await pause(1800);
-  await page.getByRole("button", { name: "Go to John's Portal" }).click();
+  await page.getByRole("link", { name: "Open John's Portal" }).click();
   await page.waitForURL("**/john/portal/");
   await pause(1500);
   await page.getByRole("button", { name: "Generate My Anonymous ID" }).click();
@@ -53,7 +53,7 @@ let johnId;
     await page.waitForSelector("svg[height='192']", { timeout: 20000 });
     await pause(4500);
   } catch {}
-  await page.getByRole("button", { name: "Simulate proof (demo mode)" }).click();
+  await page.getByRole("button", { name: "Simulate proof (dev only)" }).click();
   const idBox = page.locator("p.font-mono.break-all");
   await idBox.waitFor({ timeout: 90000 });
   johnId = (await idBox.textContent()).trim();
@@ -73,12 +73,12 @@ let johnId;
     await page.waitForSelector("svg[height='176']", { timeout: 20000 });
     await pause(3500);
   } catch {}
-  await page.getByRole("button", { name: "Simulate proof (demo mode)" }).click();
+  await page.getByRole("button", { name: "Simulate proof (dev only)" }).click();
   await page.getByText(/Registered worker ID/).waitFor({ timeout: 90000 });
   await pause(1500);
   await page.fill("#check-id", johnId);
   await page.getByRole("button", { name: "Check", exact: true }).click();
-  await page.getByText(/This ID is clean/).waitFor({ timeout: 30000 });
+  await page.getByText(/Clean —/).waitFor({ timeout: 30000 });
   await pause(3500);
   await finish(c);
 }
@@ -127,7 +127,7 @@ let interactionUrl;
 
   await page.fill("#check-id", johnId);
   await page.getByRole("button", { name: "Check", exact: true }).click();
-  await page.getByText(/This ID is BURNED/).waitFor({ timeout: 30000 });
+  await page.getByText(/Burned by/).waitFor({ timeout: 30000 });
   await pause(3500);
 
   // retract the burn (author-only correction) → clean again
@@ -140,7 +140,7 @@ let interactionUrl;
     await page.fill("#check-id", johnId);
     await page.getByRole("button", { name: "Check", exact: true }).click();
     clean = await page
-      .getByText(/This ID is clean/)
+      .getByText(/Clean —/)
       .waitFor({ timeout: 6000 })
       .then(() => true)
       .catch(() => false);
