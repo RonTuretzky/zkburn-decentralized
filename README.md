@@ -44,9 +44,15 @@ foundry.toml          # Foundry config at root (etherform's workflows expect thi
 contracts/src/        # ZKBurn.sol + zkPassport interface
 contracts/script/     # Deploy.s.sol (env-driven)
 contracts/test/       # Foundry tests
-web/                  # Next.js dapp (John's Portal, Worker's Dashboard)
-.github/              # etherform CI/CD (BreadchainCoop/etherform reusable workflows)
+web/                  # Next.js dapp — Breadchain UI (@breadcoop/ui, Tailwind v4)
+.github/              # etherform CI/CD + GitHub Pages deploy
 ```
+
+## UI & wallet model
+
+The dapp uses Breadchain's design system [`@breadcoop/ui`](https://github.com/BreadchainCoop/bread-ui-kit) (paper theme, Pogaca type, orange/blue/jade) — the kit provides the branded `Button`/typography/`Logo`; form primitives are built on its tokens. Following the kit's own consumer pattern (crowdstake.fun), the app **owns its wallet layer** rather than mounting the kit's connect flow.
+
+Each visitor gets an **anonymous, in-browser session wallet** (a viem burner in `localStorage`) — deliberately, not a "connect MetaMask" flow: this is a safety tool where linking a doxxable personal wallet would defeat the purpose. Fund it with a little xDAI to transact. (A gasless relayer/paymaster so users need no xDAI is the main remaining productionization step.)
 
 ## Trust model & the "optimistic" mode
 

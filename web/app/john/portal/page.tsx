@@ -4,18 +4,12 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import {
-  AlertTriangle,
-  CircleCheckBig,
-  ListOrdered,
-  Loader,
-  UserCheck,
-} from "lucide-react";
+import { CheckCircle, ListNumbers, SealCheck, Warning } from "@phosphor-icons/react";
+import { Body, Button, Heading3, Logo } from "@breadcoop/ui";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -56,7 +50,6 @@ function JohnPortal() {
   const [justConfirmed, setJustConfirmed] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  // Recover an existing registration for this burner wallet.
   useEffect(() => {
     if (!address || !isContractConfigured) return;
     getIdOf(address)
@@ -64,7 +57,6 @@ function JohnPortal() {
       .catch(() => {});
   }, [address]);
 
-  // Poll John's interactions + status while registered.
   const refresh = useCallback(async () => {
     if (!johnId) return;
     try {
@@ -152,186 +144,180 @@ function JohnPortal() {
   const busy = submitting || reg.phase === "requesting" || reg.phase === "proving";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-4 py-12">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-center text-2xl text-white">John&apos;s Portal</CardTitle>
-          <CardDescription className="text-center">
-            Generate your anonymous ZK-powered ID and authorize interactions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isContractConfigured && (
-            <Alert variant="warning">
-              <AlertTitle>Contract not configured</AlertTitle>
-              <AlertDescription>
-                Set NEXT_PUBLIC_ZKBURN_ADDRESS to the deployed ZKBurn address.
-              </AlertDescription>
-            </Alert>
-          )}
+    <main className="flex min-h-screen items-center justify-center bg-paper-main px-4 py-12">
+      <div className="w-full max-w-md">
+        <Link href="/app" className="mb-6 flex items-center justify-center gap-2">
+          <Logo color="orange" size={24} />
+          <span className="font-breadDisplay text-lg font-bold text-surface-ink">ZKBurn</span>
+        </Link>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-center text-2xl">John&apos;s Portal</CardTitle>
+            <CardDescription className="text-center">
+              Generate your anonymous zkPassport ID and authorize interactions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!isContractConfigured && (
+              <Alert variant="warning">
+                <AlertTitle>Contract not configured</AlertTitle>
+                <AlertDescription>Set NEXT_PUBLIC_ZKBURN_ADDRESS.</AlertDescription>
+              </Alert>
+            )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" /> Authentication Error
-              </AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle className="flex items-center gap-2">
+                  <Warning className="h-4 w-4" weight="bold" /> Authentication error
+                </AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          {/* State 1: not registered */}
-          {!johnId && (
-            <>
-              {reg.phase === "qr" ? (
-                <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900 p-4 text-center">
-                  <p className="text-sm text-gray-300">
-                    Scan with the <span className="font-semibold text-white">ZKPassport app</span> to
-                    prove you&apos;re a real person — without revealing who you are.
-                  </p>
-                  <div className="mx-auto w-fit rounded-lg bg-white p-2">
-                    <QRCodeSVG value={reg.url} size={192} fgColor="#111827" bgColor="#ffffff" />
+            {!johnId && (
+              <>
+                {reg.phase === "qr" ? (
+                  <div className="space-y-3 rounded-xl border border-paper-2 bg-paper-1 p-4 text-center">
+                    <p className="text-sm text-surface-grey-2">
+                      Scan with the <span className="font-semibold text-surface-ink">ZKPassport app</span> to
+                      prove you&apos;re a real person — without revealing who you are.
+                    </p>
+                    <div className="mx-auto w-fit rounded-lg bg-white p-2">
+                      <QRCodeSVG value={reg.url} size={192} fgColor="#1b201a" bgColor="#ffffff" />
+                    </div>
+                    <a
+                      href={reg.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block break-all text-xs text-primary-blue underline"
+                    >
+                      Open link on this device
+                    </a>
+                    <p className="text-sm text-surface-grey-2">Waiting for scan…</p>
                   </div>
-                  <a
-                    href={reg.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block break-all text-xs text-gray-500 underline hover:text-gray-300"
+                ) : (
+                  <Button
+                    app="fund"
+                    variant="primary"
+                    className="w-full"
+                    isLoading={busy}
+                    showChildrenWhenLoading
+                    leftIcon={!busy ? <SealCheck className="h-5 w-5" weight="bold" /> : undefined}
+                    onClick={startRealFlow}
+                    disabled={busy || !isContractConfigured}
                   >
-                    Open link on this device
-                  </a>
-                  <p className="text-sm text-gray-400">Waiting for scan…</p>
-                </div>
-              ) : (
-                <Button
-                  onClick={startRealFlow}
-                  disabled={busy || !isContractConfigured}
-                  className="w-full bg-white px-8 py-3 text-lg text-black hover:bg-gray-300"
-                >
-                  {busy ? (
-                    <>
-                      <Loader className="h-5 w-5 animate-spin" /> Authenticating...
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck className="h-5 w-5" /> Generate My Anonymous ID
-                    </>
-                  )}
-                </Button>
-              )}
+                    {busy ? "Authenticating…" : "Generate My Anonymous ID"}
+                  </Button>
+                )}
 
-              {reg.phase === "scanned" && (
-                <p className="animate-pulse text-center text-sm text-gray-400">
-                  Request received — check your phone…
-                </p>
-              )}
-              {reg.phase === "proving" && (
-                <p className="animate-pulse text-center text-sm text-gray-400">
-                  Generating zero-knowledge proof…
-                </p>
-              )}
-              {submitting && (
-                <p className="animate-pulse text-center text-sm text-gray-400">
-                  Registering your JohnID on Gnosis Chain…
-                </p>
-              )}
-
-              {DEMO_MODE && !submitting && (
-                <Button
-                  onClick={startSimulated}
-                  disabled={busy || !isContractConfigured}
-                  className="w-full border border-purple-500/50 bg-purple-900/20 text-purple-300 hover:bg-purple-900/40"
-                >
-                  Simulate proof (demo mode)
-                </Button>
-              )}
-            </>
-          )}
-
-          {/* State 2: registered */}
-          {johnId && (
-            <>
-              <div className="space-y-2 rounded-lg border border-gray-700 bg-gray-900 p-4">
-                <div className="flex items-center gap-2 text-white">
-                  <UserCheck className="h-5 w-5 text-gray-300" />
-                  <span className="font-semibold">ID Generated Successfully!</span>
-                  {status && <GradeBadge zkVerified={status.zkVerified} devMode={status.devMode} />}
-                </div>
-                <p className="break-all rounded bg-gray-800 p-2 font-mono text-sm text-white">
-                  {johnId}
-                </p>
-                {status && (
-                  <p className="text-xs text-gray-400">
-                    {status.isBurned
-                      ? `⚠ This ID is BURNED (${status.burnCount} burn${status.burnCount === 1 ? "" : "s"}).`
-                      : `This ID is clean with ${status.vouchCount} positive vouch(es).`}
+                {reg.phase === "scanned" && (
+                  <p className="text-center text-sm text-surface-grey-2">Request received — check your phone…</p>
+                )}
+                {reg.phase === "proving" && (
+                  <p className="text-center text-sm text-surface-grey-2">Generating zero-knowledge proof…</p>
+                )}
+                {submitting && (
+                  <p className="text-center text-sm text-surface-grey-2">
+                    Registering your JohnID on Gnosis Chain…
                   </p>
                 )}
-              </div>
 
-              <div className="space-y-2 rounded-lg border border-gray-700 bg-gray-900 p-4">
-                <div className="flex items-center gap-2 font-semibold text-white">
-                  <ListOrdered className="h-5 w-5 text-gray-300" /> Next Step
+                {DEMO_MODE && !submitting && (
+                  <Button
+                    app="fund"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={startSimulated}
+                    disabled={busy || !isContractConfigured}
+                  >
+                    Simulate proof (dev only)
+                  </Button>
+                )}
+              </>
+            )}
+
+            {johnId && (
+              <>
+                <div className="space-y-2 rounded-xl border border-paper-2 bg-paper-1 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SealCheck className="h-5 w-5 text-system-green" weight="fill" />
+                    <span className="font-semibold text-surface-ink">ID generated</span>
+                    {status && <GradeBadge zkVerified={status.zkVerified} devMode={status.devMode} />}
+                  </div>
+                  <p className="break-all rounded bg-paper-0 p-2 font-mono text-sm text-surface-ink">
+                    {johnId}
+                  </p>
+                  {status && (
+                    <p className="text-xs text-surface-grey-2">
+                      {status.isBurned
+                        ? `⚠ This ID is burned by ${status.distinctBurners} worker(s).`
+                        : `Clean — ${status.vouchCount} vouch(es) from ${status.distinctVouchers} worker(s).`}
+                    </p>
+                  )}
                 </div>
-                <p className="text-sm text-gray-400">
-                  Present this ID to the Worker. Once they verify it, they will show you a QR code to
-                  authorize the interaction.
-                </p>
-              </div>
 
-              {justConfirmed && pending.length === 0 && (
-                <div className="space-y-2 py-4 text-center">
-                  <CircleCheckBig className="mx-auto h-20 w-20 text-gray-400" />
-                  <h3 className="text-2xl font-bold text-white">Interaction Authorized!</h3>
-                  <p className="text-gray-400">
-                    You have successfully consented to log this interaction.
+                <div className="space-y-2 rounded-xl border border-paper-2 bg-paper-1 p-4">
+                  <div className="flex items-center gap-2 font-semibold text-surface-ink">
+                    <ListNumbers className="h-5 w-5 text-core-orange" weight="bold" /> Next step
+                  </div>
+                  <p className="text-sm text-surface-grey-2">
+                    Present this ID to the worker. When they record an interaction, authorize it below
+                    to consent to logging it on-chain.
                   </p>
                 </div>
-              )}
 
-              {pending.length > 0 && (
-                <div className="space-y-2 rounded-lg border border-gray-700 bg-gray-900 p-4">
-                  <p className="font-semibold text-white">Pending interaction requests</p>
-                  {pending.map(({ id, interaction }) => (
-                    <div
-                      key={id.toString()}
-                      className={`flex items-center justify-between gap-2 rounded border p-2 text-sm ${
-                        highlightId === id.toString()
-                          ? "border-gray-400 bg-gray-800"
-                          : "border-gray-700"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-gray-300">Interaction #{id.toString()}</p>
-                        <p className="truncate font-mono text-xs text-gray-500">
-                          Worker {interaction.workerId}
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => authorize(id)}
-                        disabled={confirmingId !== null}
-                        className="shrink-0 bg-gray-700 text-white hover:bg-gray-600"
+                {justConfirmed && pending.length === 0 && (
+                  <div className="space-y-2 py-4 text-center">
+                    <CheckCircle className="mx-auto h-16 w-16 text-system-green" weight="fill" />
+                    <Heading3>Interaction authorized</Heading3>
+                    <Body>You have successfully consented to log this interaction.</Body>
+                  </div>
+                )}
+
+                {pending.length > 0 && (
+                  <div className="space-y-2 rounded-xl border border-paper-2 bg-paper-1 p-4">
+                    <p className="font-semibold text-surface-ink">Pending interaction requests</p>
+                    {pending.map(({ id, interaction }) => (
+                      <div
+                        key={id.toString()}
+                        className={`flex items-center justify-between gap-2 rounded-lg border p-2 text-sm ${
+                          highlightId === id.toString()
+                            ? "border-core-orange bg-orange-0"
+                            : "border-paper-2 bg-paper-0"
+                        }`}
                       >
-                        {confirmingId === id ? (
-                          <Loader className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Authorize"
-                        )}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                        <div className="min-w-0">
+                          <p className="text-surface-ink">Interaction #{id.toString()}</p>
+                          <p className="truncate font-mono text-xs text-surface-grey">
+                            Worker {interaction.workerId}
+                          </p>
+                        </div>
+                        <Button
+                          app="fund"
+                          variant="primary"
+                          size="sm"
+                          isLoading={confirmingId === id}
+                          onClick={() => authorize(id)}
+                          disabled={confirmingId !== null}
+                        >
+                          Authorize
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
 
-          <WalletFooter role="john" />
-          <p className="text-center text-xs text-gray-600">
-            <Link href="/demo" className="underline hover:text-gray-400">
-              ← Back to demo hub
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+            <WalletFooter role="john" />
+            <p className="text-center text-xs text-surface-grey">
+              <Link href="/app" className="underline">
+                ← Back
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

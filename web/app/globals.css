@@ -1,7 +1,18 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "@breadcoop/ui/theme";
 
+/* Keep the bread-ui-kit's prebuilt component classes from being purged. */
+@source "../node_modules/@breadcoop/ui";
+
+/* Stable light "paper" palette (the kit's theme defaults to a dark @media). */
+html {
+  color-scheme: light;
+}
+html,
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #f6f3eb;
+}
+body {
+  font-family: var(--font-breadBody, ui-sans-serif, system-ui, sans-serif);
+  color: var(--color-surface-ink, #1a1a1a);
 }

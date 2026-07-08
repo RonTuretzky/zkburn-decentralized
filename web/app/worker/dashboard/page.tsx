@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { Flame, Loader, QrCode, Search, ThumbsUp, UserCheck, Undo2 } from "lucide-react";
+import {
+  ArrowUUpLeft,
+  Flame,
+  MagnifyingGlass,
+  QrCode,
+  SealCheck,
+  ThumbsUp,
+} from "@phosphor-icons/react";
+import { Button, Logo } from "@breadcoop/ui";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Button,
   Card,
   CardContent,
   CardFooter,
@@ -49,7 +56,7 @@ function ResultAlert({ result }: { result: Result | null }) {
   return (
     <Alert
       variant={
-        result.kind === "error" ? "destructive" : result.kind === "warning" ? "warning" : "default"
+        result.kind === "error" ? "destructive" : result.kind === "warning" ? "warning" : "positive"
       }
       className="mt-4"
     >
@@ -62,31 +69,26 @@ function ResultAlert({ result }: { result: Result | null }) {
 export default function WorkerDashboard() {
   const { account, walletClient, address } = useBurner("worker");
 
-  // Worker identity
   const [workerId, setWorkerId] = useState<`0x${string}` | null>(null);
   const [reg, setReg] = useState<RegistrationStatus>({ phase: "idle" });
   const [registering, setRegistering] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
 
-  // Card: check status
   const [checkId, setCheckId] = useState("");
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<Result | null>(null);
   const [checkedStatus, setCheckedStatus] = useState<JohnStatus | null>(null);
 
-  // Card: interaction request
   const [requestId, setRequestId] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [requestResult, setRequestResult] = useState<Result | null>(null);
   const [interactionUrl, setInteractionUrl] = useState<string | null>(null);
 
-  // Your interactions
   const [rows, setRows] = useState<Row[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
-  // Recover worker identity for this burner.
   useEffect(() => {
     if (!address || !isContractConfigured) return;
     getIdOf(address)
@@ -105,7 +107,7 @@ export default function WorkerDashboard() {
           caps: await interactionCapabilities(id, address),
         })),
       );
-      setRows(loaded.reverse()); // newest first
+      setRows(loaded.reverse());
     } catch {
       // transient RPC errors — retry on next poll
     }
@@ -120,7 +122,6 @@ export default function WorkerDashboard() {
     return () => clearInterval(t);
   }, [workerId, refreshInteractions]);
 
-  // -- worker registration --
   const submitRegistration = useCallback(
     async (params: Parameters<typeof register>[2]) => {
       if (!walletClient || !account) return;
@@ -160,7 +161,6 @@ export default function WorkerDashboard() {
 
   const busyReg = registering || reg.phase === "requesting" || reg.phase === "proving";
 
-  // -- card actions --
   const doCheck = useCallback(async () => {
     setCheckedStatus(null);
     const id = parseJohnId(checkId);
@@ -185,20 +185,20 @@ export default function WorkerDashboard() {
       if (!st.exists) {
         setCheckResult({
           kind: "error",
-          title: `Status for ID: ${shortId}`,
+          title: `Status for ${shortId}`,
           message: "Unknown JohnID — this ID has never been registered.",
         });
       } else if (st.isBurned) {
         setCheckResult({
           kind: "warning",
-          title: `Status for ID: ${shortId}`,
-          message: `This ID is BURNED by ${st.distinctBurners} distinct worker(s) (${st.burnCount} burn${st.burnCount === 1 ? "" : "s"}). Proceed with caution.${st.lastBurnNote ? ` Latest note: ${st.lastBurnNote}` : ""}`,
+          title: `Status for ${shortId}`,
+          message: `Burned by ${st.distinctBurners} distinct worker(s) (${st.burnCount} burn${st.burnCount === 1 ? "" : "s"}). Proceed with caution.${st.lastBurnNote ? ` Latest note: ${st.lastBurnNote}` : ""}`,
         });
       } else {
         setCheckResult({
           kind: "success",
-          title: `Status for ID: ${shortId}`,
-          message: `This ID is clean with ${st.vouchCount} vouch(es) from ${st.distinctVouchers} distinct worker(s).`,
+          title: `Status for ${shortId}`,
+          message: `Clean — ${st.vouchCount} vouch(es) from ${st.distinctVouchers} distinct worker(s).`,
         });
       }
     } catch (e) {
@@ -233,8 +233,8 @@ export default function WorkerDashboard() {
       );
       setRequestResult({
         kind: "success",
-        title: "Request Generated",
-        message: "Interaction request recorded. Share the link or QR code with John to confirm.",
+        title: "Request recorded",
+        message: "Share the link or QR code with John to confirm.",
       });
       refreshInteractions();
     } catch (e) {
@@ -273,10 +273,14 @@ export default function WorkerDashboard() {
   const short = (id: string) => `${id.slice(0, 10)}…${id.slice(-6)}`;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-12">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-4xl font-bold text-white">Worker&apos;s Dashboard</h1>
-        <p className="mt-2 text-gray-400">
+    <main className="min-h-screen bg-paper-main px-4 py-12">
+      <div className="mx-auto max-w-5xl">
+        <Link href="/app" className="mb-6 flex items-center gap-2">
+          <Logo color="orange" size={24} />
+          <span className="font-breadDisplay text-lg font-bold text-surface-ink">ZKBurn</span>
+        </Link>
+        <h1 className="font-breadDisplay text-3xl font-bold text-surface-ink">Worker&apos;s Dashboard</h1>
+        <p className="mt-2 text-surface-grey-2">
           Check a client&apos;s ID, record consented interactions, and build reputation.
         </p>
 
@@ -289,90 +293,81 @@ export default function WorkerDashboard() {
 
         {/* Worker registration gate */}
         {isContractConfigured && !workerId && (
-          <Card className="mt-8 border-purple-500/30">
+          <Card className="mt-8 border-core-orange/30">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl text-gray-200">
-                <UserCheck className="h-5 w-5" /> Register as a worker
+              <CardTitle className="flex items-center gap-2">
+                <SealCheck className="h-5 w-5 text-core-orange" weight="bold" /> Register as a worker
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-gray-400">
-                Recording interactions requires a zkPassport-verified identity — this makes burns
-                and vouches count as coming from a distinct, unique person (Sybil resistance). Your
+              <p className="text-sm text-surface-grey-2">
+                Recording interactions requires a zkPassport-verified identity — this makes burns and
+                vouches count as coming from a distinct, unique person (Sybil resistance). Your
                 identity stays anonymous: only a per-app nullifier is stored.
               </p>
               {regError && (
                 <Alert variant="destructive">
-                  <AlertTitle>Registration Error</AlertTitle>
+                  <AlertTitle>Registration error</AlertTitle>
                   <AlertDescription>{regError}</AlertDescription>
                 </Alert>
               )}
               {reg.phase === "qr" ? (
-                <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-900 p-4 text-center">
-                  <p className="text-sm text-gray-300">Scan with the ZKPassport app.</p>
+                <div className="space-y-3 rounded-xl border border-paper-2 bg-paper-1 p-4 text-center">
+                  <p className="text-sm text-surface-grey-2">Scan with the ZKPassport app.</p>
                   <div className="mx-auto w-fit rounded-lg bg-white p-2">
-                    <QRCodeSVG value={reg.url} size={176} fgColor="#111827" bgColor="#ffffff" />
+                    <QRCodeSVG value={reg.url} size={176} fgColor="#1b201a" bgColor="#ffffff" />
                   </div>
-                  <p className="text-sm text-gray-400">Waiting for scan…</p>
+                  <p className="text-sm text-surface-grey-2">Waiting for scan…</p>
                 </div>
               ) : (
-                <Button
-                  onClick={startRealRegistration}
-                  disabled={busyReg}
-                  className="bg-white px-6 py-3 text-black hover:bg-gray-200"
-                >
-                  {busyReg ? (
-                    <>
-                      <Loader className="h-5 w-5 animate-spin" /> Registering…
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck className="h-5 w-5" /> Register My Worker ID
-                    </>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    app="fund"
+                    variant="primary"
+                    isLoading={busyReg}
+                    showChildrenWhenLoading
+                    leftIcon={!busyReg ? <SealCheck className="h-5 w-5" weight="bold" /> : undefined}
+                    onClick={startRealRegistration}
+                    disabled={busyReg}
+                  >
+                    {busyReg ? "Registering…" : "Register My Worker ID"}
+                  </Button>
+                  {DEMO_MODE && !busyReg && (
+                    <Button app="fund" variant="secondary" onClick={() => submitRegistration(buildSimulatedParams())}>
+                      Simulate proof (dev only)
+                    </Button>
                   )}
-                </Button>
-              )}
-              {DEMO_MODE && !busyReg && (
-                <Button
-                  onClick={() => submitRegistration(buildSimulatedParams())}
-                  className="ml-0 border border-purple-500/50 bg-purple-900/20 text-purple-300 hover:bg-purple-900/40 sm:ml-3"
-                >
-                  Simulate proof (demo mode)
-                </Button>
+                </div>
               )}
             </CardContent>
           </Card>
         )}
 
         {workerId && (
-          <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-            <UserCheck className="h-3.5 w-3.5" /> Registered worker ID{" "}
-            <span className="font-mono text-gray-400">{short(workerId)}</span>
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-surface-grey-2">
+            <SealCheck className="h-4 w-4 text-system-green" weight="fill" /> Registered worker ID{" "}
+            <span className="font-mono text-surface-grey">{short(workerId)}</span>
           </p>
         )}
 
-        {/* Card: Check Client ID Status */}
+        {/* Check status */}
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl text-gray-200">
-              <Search className="h-5 w-5" /> Check Client ID Status
+            <CardTitle className="flex items-center gap-2">
+              <MagnifyingGlass className="h-5 w-5 text-core-orange" weight="bold" /> Check client ID status
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <Label htmlFor="check-id">John&apos;s Anonymous ID</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="check-id"
                 placeholder="Enter or scan John's ZK-ID"
                 value={checkId}
                 onChange={(e) => setCheckId(e.target.value)}
               />
-              <Button
-                onClick={doCheck}
-                disabled={checking}
-                className="bg-gray-700 text-white hover:bg-gray-600"
-              >
-                {checking ? <Loader className="h-4 w-4 animate-spin" /> : "Check"}
+              <Button app="fund" variant="primary" isLoading={checking} onClick={doCheck} className="sm:w-32">
+                Check
               </Button>
             </div>
             {checkedStatus?.exists && (
@@ -386,11 +381,11 @@ export default function WorkerDashboard() {
           </CardFooter>
         </Card>
 
-        {/* Card: Generate Interaction Request */}
+        {/* Record interaction */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl text-gray-200">
-              <QrCode className="h-5 w-5" /> Record an Interaction
+            <CardTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5 text-core-orange" weight="bold" /> Record an interaction
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -404,28 +399,31 @@ export default function WorkerDashboard() {
                 disabled={!workerId}
               />
               <Button
+                app="fund"
+                variant="primary"
+                isLoading={requesting}
                 onClick={doRequest}
-                disabled={requesting || !workerId}
-                className="bg-gray-700 text-white hover:bg-gray-600 sm:w-56"
+                disabled={!workerId}
+                className="sm:w-56"
               >
-                {requesting ? <Loader className="h-4 w-4 animate-spin" /> : "Generate Request"}
+                Generate request
               </Button>
             </div>
-            {!workerId && <p className="text-xs text-gray-500">Register a worker ID first.</p>}
+            {!workerId && <p className="text-xs text-surface-grey">Register a worker ID first.</p>}
           </CardContent>
           <CardFooter>
             <ResultAlert result={requestResult} />
             {interactionUrl && (
-              <div className="mt-4 space-y-2 rounded-lg border border-gray-700 bg-gray-900 p-4 text-center">
-                <p className="font-semibold text-white">Show this to John</p>
+              <div className="mt-4 space-y-2 rounded-xl border border-paper-2 bg-paper-1 p-4 text-center">
+                <p className="font-semibold text-surface-ink">Show this to John</p>
                 <div className="mx-auto w-fit rounded-lg bg-white p-2">
-                  <QRCodeSVG value={interactionUrl} size={128} fgColor="#111827" bgColor="#ffffff" />
+                  <QRCodeSVG value={interactionUrl} size={128} fgColor="#1b201a" bgColor="#ffffff" />
                 </div>
                 <a
                   href={interactionUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="block break-all text-xs text-gray-500 underline hover:text-gray-300"
+                  className="block break-all text-xs text-primary-blue underline"
                 >
                   {interactionUrl}
                 </a>
@@ -438,9 +436,7 @@ export default function WorkerDashboard() {
         {workerId && (
           <Card className="mt-8">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl text-gray-200">
-                Your Interactions
-              </CardTitle>
+              <CardTitle>Your interactions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {rowError && (
@@ -450,9 +446,9 @@ export default function WorkerDashboard() {
                 </Alert>
               )}
               {rows.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  No interactions yet. Record one above; once the client authorizes it you can vouch
-                  or burn.
+                <p className="text-sm text-surface-grey">
+                  No interactions yet. Record one above; once the client authorizes it you can vouch or
+                  burn.
                 </p>
               )}
               {rows.map(({ id, interaction, caps }) => {
@@ -460,26 +456,21 @@ export default function WorkerDashboard() {
                 const confirmed = interaction.confirmedAt !== 0n;
                 const busy = rowBusy === key;
                 return (
-                  <div
-                    key={key}
-                    className="space-y-2 rounded-lg border border-gray-700 bg-gray-900 p-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-300">
-                          Interaction #{key} with{" "}
-                          <span className="font-mono text-gray-400">{short(interaction.johnId)}</span>
-                        </p>
-                        <p className="text-xs">
-                          {confirmed ? (
-                            <span className="text-green-400">Confirmed by client</span>
-                          ) : (
-                            <span className="text-yellow-400">Awaiting client authorization</span>
-                          )}
-                          {interaction.burnUsed && <span className="text-red-400"> · burned</span>}
-                          {interaction.vouchUsed && <span className="text-green-400"> · vouched</span>}
-                        </p>
-                      </div>
+                  <div key={key} className="space-y-2 rounded-xl border border-paper-2 bg-paper-1 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-surface-ink">
+                        Interaction #{key} with{" "}
+                        <span className="font-mono text-surface-grey-2">{short(interaction.johnId)}</span>
+                      </p>
+                      <p className="text-xs">
+                        {confirmed ? (
+                          <span className="text-system-green">Confirmed by client</span>
+                        ) : (
+                          <span className="text-system-warning">Awaiting client authorization</span>
+                        )}
+                        {interaction.burnUsed && <span className="text-system-red"> · burned</span>}
+                        {interaction.vouchUsed && <span className="text-system-green"> · vouched</span>}
+                      </p>
                     </div>
 
                     {confirmed && (caps.canBurn || caps.canVouch) && (
@@ -495,40 +486,50 @@ export default function WorkerDashboard() {
                       <div className="flex flex-wrap gap-2">
                         {caps.canVouch && (
                           <Button
+                            app="fund"
+                            variant="positive"
+                            size="sm"
+                            isLoading={busy}
+                            leftIcon={<ThumbsUp className="h-4 w-4" weight="bold" />}
                             onClick={() => rowAction(id, vouch, true)}
-                            disabled={busy}
-                            className="bg-green-800 text-white hover:bg-green-700"
                           >
-                            {busy ? <Loader className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
                             Vouch
                           </Button>
                         )}
                         {caps.canBurn && (
                           <Button
+                            app="fund"
+                            variant="burn"
+                            size="sm"
+                            isLoading={busy}
+                            leftIcon={<Flame className="h-4 w-4" weight="fill" />}
                             onClick={() => rowAction(id, burn, true)}
-                            disabled={busy}
-                            className="bg-red-800 text-white hover:bg-red-700"
                           >
-                            {busy ? <Loader className="h-4 w-4 animate-spin" /> : <Flame className="h-4 w-4" />}
                             Burn
                           </Button>
                         )}
                         {caps.canRetractVouch && (
                           <Button
+                            app="fund"
+                            variant="secondary"
+                            size="sm"
+                            isLoading={busy}
+                            leftIcon={<ArrowUUpLeft className="h-4 w-4" weight="bold" />}
                             onClick={() => rowAction(id, (w, a, i) => retractVouch(w, a, i), false)}
-                            disabled={busy}
-                            className="border border-gray-600 text-gray-300 hover:bg-gray-800"
                           >
-                            <Undo2 className="h-4 w-4" /> Retract vouch
+                            Retract vouch
                           </Button>
                         )}
                         {caps.canRetractBurn && (
                           <Button
+                            app="fund"
+                            variant="secondary"
+                            size="sm"
+                            isLoading={busy}
+                            leftIcon={<ArrowUUpLeft className="h-4 w-4" weight="bold" />}
                             onClick={() => rowAction(id, (w, a, i) => retractBurn(w, a, i), false)}
-                            disabled={busy}
-                            className="border border-gray-600 text-gray-300 hover:bg-gray-800"
                           >
-                            <Undo2 className="h-4 w-4" /> Retract burn
+                            Retract burn
                           </Button>
                         )}
                       </div>
@@ -542,9 +543,9 @@ export default function WorkerDashboard() {
 
         <div className="mx-auto mt-8 max-w-md">
           <WalletFooter role="worker" />
-          <p className="mt-2 text-center text-xs text-gray-600">
-            <Link href="/demo" className="underline hover:text-gray-400">
-              ← Back to demo hub
+          <p className="mt-2 text-center text-xs text-surface-grey">
+            <Link href="/app" className="underline">
+              ← Back
             </Link>
           </p>
         </div>

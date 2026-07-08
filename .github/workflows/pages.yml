@@ -30,9 +30,10 @@ jobs:
       STATIC_EXPORT: "true"
       # Live, verified ZKBurn V2 contract on Gnosis mainnet.
       NEXT_PUBLIC_ZKBURN_ADDRESS: "0xE8bE1A3C20a484c66668c500E6306968f92ceb88"
-      # CORS-friendly public RPC + demo mode so the site is fully explorable without any secrets.
+      # CORS-friendly public RPC. No demo/simulate path in production — the only
+      # registration route is a real zkPassport proof (dev-mode still accepts the
+      # app's mock passports until the verifier lands on Gnosis).
       NEXT_PUBLIC_RPC_URL: https://gnosis-rpc.publicnode.com
-      NEXT_PUBLIC_DEMO_MODE: "1"
       NEXT_PUBLIC_ZKPASSPORT_DEVMODE: "true"
     steps:
       - uses: actions/checkout@v4

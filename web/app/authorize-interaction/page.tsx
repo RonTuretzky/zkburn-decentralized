@@ -3,15 +3,9 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle, Loader } from "lucide-react";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui";
+import { CheckCircle, CircleNotch, Warning } from "@phosphor-icons/react";
+import { Body, Button, Heading3, Logo } from "@breadcoop/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui";
 import { isContractConfigured } from "@/lib/chain";
 import { useBurner } from "@/lib/wallet";
 import {
@@ -33,10 +27,7 @@ function AuthorizeInteraction() {
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
   const { account, walletClient, address } = useBurner("john");
-  const [phase, setPhase] = useState<Phase>({
-    kind: "loading",
-    message: "Loading interaction…",
-  });
+  const [phase, setPhase] = useState<Phase>({ kind: "loading", message: "Loading interaction…" });
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -45,10 +36,7 @@ function AuthorizeInteraction() {
       return;
     }
     if (idParam === null || idParam === "" || !/^\d+$/.test(idParam)) {
-      setPhase({
-        kind: "error",
-        message: "No authorization id provided. This link is invalid.",
-      });
+      setPhase({ kind: "error", message: "No authorization id provided. This link is invalid." });
       return;
     }
     if (!address) return;
@@ -60,17 +48,14 @@ function AuthorizeInteraction() {
           setPhase({ kind: "error", message: "This interaction has already been authorized." });
           return;
         }
-        const myJohnId = await getIdOf(address);
-        if (!myJohnId || myJohnId.toLowerCase() !== interaction.johnId.toLowerCase()) {
+        const myId = await getIdOf(address);
+        if (!myId || myId.toLowerCase() !== interaction.johnId.toLowerCase()) {
           setPhase({ kind: "not-yours", interaction });
           return;
         }
         setPhase({ kind: "ready", id, interaction });
       } catch (e) {
-        setPhase({
-          kind: "error",
-          message: friendlyError(e) || "Invalid or expired authorization id.",
-        });
+        setPhase({ kind: "error", message: friendlyError(e) || "Invalid or expired authorization id." });
       }
     })();
   }, [idParam, address]);
@@ -89,87 +74,81 @@ function AuthorizeInteraction() {
   }, [phase, walletClient, account]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-4 py-12">
-      <Card className="w-full max-w-md text-center">
-        <CardHeader>
-          <CardTitle className="text-2xl text-white">Interaction Authorization</CardTitle>
-          <CardDescription>Finalizing the mutual consent for this interaction.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {phase.kind === "loading" && (
-            <div className="space-y-3 py-6">
-              <Loader className="mx-auto h-12 w-12 animate-spin text-gray-400" />
-              <p className="text-gray-400">{phase.message}</p>
-            </div>
-          )}
+    <main className="flex min-h-screen items-center justify-center bg-paper-main px-4 py-12">
+      <div className="w-full max-w-md">
+        <Link href="/app" className="mb-6 flex items-center justify-center gap-2">
+          <Logo color="orange" size={24} />
+          <span className="font-breadDisplay text-lg font-bold text-surface-ink">ZKBurn</span>
+        </Link>
+        <Card className="text-center">
+          <CardHeader>
+            <CardTitle className="text-2xl">Interaction authorization</CardTitle>
+            <CardDescription>Finalizing the mutual consent for this interaction.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {phase.kind === "loading" && (
+              <div className="space-y-3 py-6">
+                <CircleNotch className="mx-auto h-12 w-12 animate-spin text-core-orange" weight="bold" />
+                <Body>{phase.message}</Body>
+              </div>
+            )}
 
-          {phase.kind === "ready" && (
-            <div className="space-y-4 py-2">
-              <p className="text-sm text-gray-400">
-                Worker{" "}
-                <span className="break-all font-mono text-gray-300">
-                  {phase.interaction.workerId}
-                </span>{" "}
-                requests to log an interaction with your JohnID.
-              </p>
-              <Button
-                onClick={authorize}
-                disabled={confirming}
-                className="w-full bg-white py-3 text-lg text-black hover:bg-gray-300"
-              >
-                {confirming ? (
-                  <>
-                    <Loader className="h-5 w-5 animate-spin" /> Authorizing your interaction...
-                  </>
-                ) : (
-                  "Authorize Interaction"
-                )}
-              </Button>
-            </div>
-          )}
+            {phase.kind === "ready" && (
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-surface-grey-2">
+                  Worker{" "}
+                  <span className="break-all font-mono text-surface-ink">{phase.interaction.workerId}</span>{" "}
+                  requests to log an interaction with your JohnID.
+                </p>
+                <Button
+                  app="fund"
+                  variant="primary"
+                  className="w-full"
+                  isLoading={confirming}
+                  showChildrenWhenLoading
+                  onClick={authorize}
+                >
+                  {confirming ? "Authorizing…" : "Authorize interaction"}
+                </Button>
+              </div>
+            )}
 
-          {phase.kind === "success" && (
-            <div className="space-y-3 py-6">
-              <CheckCircle className="mx-auto h-16 w-16 text-gray-400" />
-              <p className="font-semibold text-white">Success!</p>
-              <p className="text-gray-400">Interaction successfully authorized and recorded.</p>
-            </div>
-          )}
+            {phase.kind === "success" && (
+              <div className="space-y-3 py-6">
+                <CheckCircle className="mx-auto h-16 w-16 text-system-green" weight="fill" />
+                <Heading3>Success</Heading3>
+                <Body>Interaction successfully authorized and recorded.</Body>
+              </div>
+            )}
 
-          {phase.kind === "not-yours" && (
-            <div className="space-y-3 py-6">
-              <AlertTriangle className="mx-auto h-12 w-12 text-yellow-500" />
-              <p className="font-semibold text-yellow-400">This request isn&apos;t for your ID</p>
-              <p className="text-sm text-gray-400">
-                This interaction request is addressed to JohnID{" "}
-                <span className="break-all font-mono">{phase.interaction.johnId}</span>, which is not
-                bound to this device&apos;s wallet. Open this link on the device where you generated
-                your JohnID.
-              </p>
-              <Link href="/john/portal">
-                <Button className="border border-gray-600 text-gray-300 hover:bg-gray-800">
+            {phase.kind === "not-yours" && (
+              <div className="space-y-3 py-6">
+                <Warning className="mx-auto h-12 w-12 text-system-warning" weight="fill" />
+                <Heading3>This request isn&apos;t for your ID</Heading3>
+                <p className="text-sm text-surface-grey-2">
+                  This request is addressed to a different JohnID than the one bound to this device.
+                  Open this link on the device where you generated your JohnID.
+                </p>
+                <Button as={Link} href="/john/portal" app="fund" variant="secondary">
                   Open John&apos;s Portal
                 </Button>
-              </Link>
-            </div>
-          )}
+              </div>
+            )}
 
-          {phase.kind === "error" && (
-            <div className="space-y-3 py-6">
-              <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
-              <p className="font-semibold text-red-400">Authorization Failed</p>
-              <p className="text-gray-400">{phase.message}</p>
-            </div>
-          )}
+            {phase.kind === "error" && (
+              <div className="space-y-3 py-6">
+                <Warning className="mx-auto h-12 w-12 text-system-red" weight="fill" />
+                <Heading3>Authorization failed</Heading3>
+                <Body>{phase.message}</Body>
+              </div>
+            )}
 
-          <Button
-            onClick={() => window.close()}
-            className="border border-gray-600 text-gray-300 hover:bg-gray-800"
-          >
-            Close Window
-          </Button>
-        </CardContent>
-      </Card>
+            <Button app="fund" variant="secondary" className="w-full" onClick={() => window.close()}>
+              Close window
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

@@ -1,29 +1,14 @@
-import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type LabelHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, type HTMLAttributes, type InputHTMLAttributes, type LabelHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cn } from "@breadcoop/ui";
 
-function cn(...classes: (string | undefined | false)[]) {
-  return classes.filter(Boolean).join(" ");
-}
-
-export const Button = forwardRef<
-  HTMLButtonElement,
-  ButtonHTMLAttributes<HTMLButtonElement>
->(function Button({ className, ...props }, ref) {
-  return (
-    <button
-      ref={ref}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2",
-        className,
-      )}
-      {...props}
-    />
-  );
-});
+// The bread-ui-kit ships no Card / Input / Alert primitives, so we build them
+// here using the kit's design tokens (paper surfaces, surface-ink text, system
+// colors). Button / Typography / Logo / Chip / Footer come straight from the kit.
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-xl border bg-gray-950 border-gray-800 text-gray-300 shadow", className)}
+      className={cn("rounded-2xl border border-paper-2 bg-paper-0 text-surface-ink shadow-sm", className)}
       {...props}
     />
   );
@@ -34,11 +19,16 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("font-semibold leading-none tracking-tight", className)} {...props} />;
+  return (
+    <h3
+      className={cn("font-breadDisplay text-xl font-semibold leading-none tracking-tight text-surface-ink", className)}
+      {...props}
+    />
+  );
 }
 
 export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-gray-400", className)} {...props} />;
+  return <p className={cn("text-sm text-surface-grey-2", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -53,15 +43,16 @@ export function Alert({
   className,
   variant = "default",
   ...props
-}: HTMLAttributes<HTMLDivElement> & { variant?: "default" | "destructive" | "warning" }) {
+}: HTMLAttributes<HTMLDivElement> & { variant?: "default" | "destructive" | "warning" | "positive" }) {
   return (
     <div
       role="alert"
       className={cn(
-        "relative w-full rounded-lg border px-4 py-3 text-sm",
-        variant === "destructive" && "bg-red-900/20 border-red-500/50 text-red-400",
-        variant === "warning" && "bg-yellow-900/20 border-yellow-500/50 text-yellow-400",
-        variant === "default" && "bg-gray-900 border-gray-700 text-gray-300",
+        "relative w-full rounded-xl border px-4 py-3 text-sm",
+        variant === "destructive" && "border-system-red/40 bg-red-0 text-system-red",
+        variant === "warning" && "border-system-warning/40 bg-orange-0 text-system-warning",
+        variant === "positive" && "border-system-green/40 bg-jade-0 text-system-green",
+        variant === "default" && "border-paper-2 bg-paper-1 text-surface-ink",
         className,
       )}
       {...props}
@@ -83,7 +74,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       <input
         ref={ref}
         className={cn(
-          "flex h-10 w-full rounded-md border bg-gray-800 border-gray-700 text-gray-50 px-3 py-2 text-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-11 w-full rounded-xl border border-paper-2 bg-paper-0 px-3 py-2 text-sm text-surface-ink placeholder:text-surface-grey focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-core-orange/40 disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}
@@ -94,30 +85,26 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
-    <label
-      className={cn("text-sm font-medium leading-none text-gray-300", className)}
-      {...props}
-    />
+    <label className={cn("text-sm font-medium leading-none text-surface-grey-2", className)} {...props} />
   );
 }
 
-export const Textarea = forwardRef<
-  HTMLTextAreaElement,
-  TextareaHTMLAttributes<HTMLTextAreaElement>
->(function Textarea({ className, ...props }, ref) {
-  return (
-    <textarea
-      ref={ref}
-      className={cn(
-        "flex min-h-[80px] w-full rounded-md border bg-gray-800 border-gray-700 text-gray-50 px-3 py-2 text-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      {...props}
-    />
-  );
-});
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return (
+      <textarea
+        ref={ref}
+        className={cn(
+          "flex min-h-[80px] w-full rounded-xl border border-paper-2 bg-paper-0 px-3 py-2 text-sm text-surface-ink placeholder:text-surface-grey focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-core-orange/40 disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);
 
-/** Registration-grade badge: verified (on-chain ZK) / optimistic / simulated. */
+/** Registration-grade badge, styled on the bread-ui-kit Chip tokens. */
 export function GradeBadge({
   zkVerified,
   devMode,
@@ -127,16 +114,16 @@ export function GradeBadge({
   devMode: boolean;
   className?: string;
 }) {
-  const grade = zkVerified ? "verified" : devMode ? "simulated / dev proof" : "optimistic";
+  const grade = zkVerified ? "verified" : devMode ? "unverified / dev" : "optimistic";
   const styles = zkVerified
-    ? "bg-green-900/30 border-green-500/50 text-green-400"
+    ? "border-system-green/40 bg-jade-0 text-system-green"
     : devMode
-      ? "bg-purple-900/30 border-purple-500/50 text-purple-300"
-      : "bg-blue-900/30 border-blue-500/50 text-blue-300";
+      ? "border-surface-grey/40 bg-paper-1 text-surface-grey-2"
+      : "border-primary-blue/40 bg-blue-0 text-primary-blue";
   const title = zkVerified
     ? "Proof verified on-chain by the zkPassport verifier"
     : devMode
-      ? "Dev-mode / simulated registration — not a verified passport proof"
+      ? "Dev-mode registration — not a verified passport proof"
       : "Real zkPassport proof accepted optimistically (verifier not yet deployed on Gnosis)";
   return (
     <span
@@ -151,3 +138,6 @@ export function GradeBadge({
     </span>
   );
 }
+
+// Re-export the kit's Button so pages import a single UI surface.
+export { Button } from "@breadcoop/ui";

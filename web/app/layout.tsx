@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ZKBurn",
   description:
-    "Empowering Sex Workers with Verifiable, Anonymous Safety — zkPassport identities, mutual-consent interaction records, burns and vouches on Gnosis Chain.",
+    "Verifiable, anonymous safety for sex workers — zkPassport identities, mutual-consent interaction records, burns and vouches on Gnosis Chain.",
 };
 
 export default function RootLayout({
@@ -14,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-black text-gray-300 antialiased">{children}</body>
+      <body className="min-h-screen bg-paper-main font-breadBody text-surface-ink antialiased">
+        {children}
+      </body>
     </html>
   );
 }
